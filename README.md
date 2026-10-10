@@ -15,13 +15,14 @@ All scripts live in [`tools/`](tools).
 | `tools/unpack_limbo.py` | Extract a `limbo_boot.pkg` / `limbo_runtime.pkg` into files. |
 | `tools/repack_limbo.py` | Rebuild a `.pkg`, replacing named entries; identity-safe. |
 | `tools/limbo_tex.py` | Inspect / extract / pack / patch / round-trip sprite + atlas textures. |
+| `tools/limbo_workflow.py` | Bulk human-edit loop: dump every sprite + atlas member to PNGs, then rebuild only the ones you changed. |
 | `tools/make_titlezero.py` | Example edit: zero the luma plane of a standalone sprite. |
 | `tools/shot_diff.py` | Diff a sequence of screenshots (numpy/PIL) to confirm an edit. |
 
 ## Install
 
-Python 3.10+. `tools/limbo_tex.py`, `tools/make_titlezero.py` (optional) and
-`tools/shot_diff.py` need
+Python 3.10+. `tools/limbo_tex.py`, `tools/limbo_workflow.py`, `tools/make_titlezero.py`
+(optional) and `tools/shot_diff.py` need
 [`numpy`](https://pypi.org/project/numpy/) and [`pillow`](https://pypi.org/project/pillow/):
 
 ```
@@ -63,6 +64,12 @@ python tools/limbo_tex.py patch    ATLAS.pngatlas --out NEW --in edited.png \
         --rect 804,2345,215,206 --mips                                       # edit all atlas mips
 python tools/limbo_tex.py roundtrip FILE ...          # decode+re-encode pixels, check byte-identical
 
+# bulk human-edit loop: dump every sprite + atlas member to PNGs at once,
+# a human edits any of them, then pack rebuilds only what changed
+python tools/limbo_workflow.py extract --boot out/boot --out assets
+python tools/limbo_workflow.py pack --boot out/boot --assets assets ^
+    --pkg-in limbo_boot.pkg --filelists <filelist_dir> --pkg-out new_boot.pkg
+
 # example edit (same byte length keeps the .d deflate valid)
 python tools/make_titlezero.py  out/boot/.../limbo\ title.png  title_zero.png
 
@@ -76,6 +83,11 @@ python tools/repack_limbo.py --identity-test limbo_boot.pkg <filelist_dir>
 # confirm an in-game change
 python tools/shot_diff.py vanilla.png modded.png
 ```
+
+`limbo_workflow.py extract` writes `assets/MANIFEST.json` recording, for each PNG,
+its source texture and (for atlas members) the manifest rect, plus the PNG's
+original SHA-256 — so `pack` rebuilds only the textures a human actually changed
+and leaves every other pkg entry verbatim.
 
 Copy the rebuilt `new_boot.pkg` over the installed `limbo_boot.pkg` (back it up first —
 e.g. `um backup` from universal-modder) and launch via Steam. Steam does not revert
