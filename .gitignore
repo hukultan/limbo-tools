@@ -1,0 +1,12 @@
+# extracted game data - never commit
+out/
+lab/
+pristine/
+__UNKNOWN/
+*.pkg
+*.pngatlas
+*.png
+*.png_a
+*.pngblur
+!docs/**
+*.tmp.pkg
