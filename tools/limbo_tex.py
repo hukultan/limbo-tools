@@ -33,8 +33,6 @@ def parse(path):
     npix = (len(d) - pix) // 2
     info = dict(file=path, size=len(d), magic=magic, ver=ver, flags=flags,
                 path=path_s, pathlen=L, path_end=se, pix=pix, npix=npix)
-    if flags == 17 and len(d) - pix >= 8192:
-        info["sheet_w"] = struct.unpack_from("<H", d, se)  # se == se+8? no
     # virtual dims for atlases live at se+10 / se+12
     if flags == 17:
         vw, vh = struct.unpack_from("<HH", d, se + 10)
@@ -129,13 +127,19 @@ def cmd_patch(d, info, out, png, w=None, h=None, rect=None):
 
 
 def cmd_roundtrip(files):
+    # Real test: re-encode the pixel region through the RGBA path and confirm the
+    # re-emitted file (verbatim header + re-encoded pixels) is byte-identical.
     ok = True
     for f in files:
         d, info = parse(f)
-        same = d == d[: info["pix"]] + d[info["pix"] :]
+        px = to_u16(pixels(d, info))
+        back = rgba_to_a8l8(a8l8_to_rgba(px)).astype("<u2")
+        reemitted = d[: info["pix"]] + back.tobytes()
+        same = reemitted == d and to_u16(back.tobytes()).tolist() == px.tolist()
         ok &= same
         print("%-58s %s %s" % (os.path.basename(f), "OK" if same else "FAIL", info["path"]))
     print("ROUND TRIP:", "ALL PASS (%d)" % len(files) if ok else "FAIL")
+    return 0 if ok else 1
 
 
 def main(argv):

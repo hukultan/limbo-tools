@@ -10,7 +10,7 @@ The pixel region is a full mip chain (W,H -> 2,1).
 Usage:
     make_titlezero.py <in_sprites_png> <out_png>
 """
-import sys, struct
+import sys, struct, os
 
 def main(argv):
     if len(argv) != 2:
@@ -26,6 +26,7 @@ def main(argv):
     pix_start = se + 18
     for i in range(pix_start, len(d), 2):
         d[i] = 0  # L = 0, keep A
+    os.makedirs(os.path.dirname(os.path.abspath(dst)), exist_ok=True)
     open(dst, "wb").write(bytes(d))
     print("wrote %d bytes to %s (WxH=%dx%d) L plane zeroed all mips" % (len(d), dst, w, h))
     return 0

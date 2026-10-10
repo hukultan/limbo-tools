@@ -57,7 +57,7 @@ python tools/unpack_limbo.py  limbo_runtime.pkg  <filelist_dir>  out/runtime
 python tools/limbo_tex.py inspect  out/boot/derived/pc/data/sprites/edges/metal_heavy.png
 python tools/limbo_tex.py decode   FILE --w 512 --h 16 --out metal_heavy.png
 python tools/limbo_tex.py patch    FILE --out NEW --in edited.png --w 512 --h 16
-python tools/limbo_tex.py roundtrip FILE ...          # parse + re-emit, compare SHA
+python tools/limbo_tex.py roundtrip FILE ...          # decode+re-encode pixels, check byte-identical
 
 # example edit (same byte length keeps the .d deflate valid)
 python tools/make_titlezero.py  out/boot/.../limbo\ title.png  title_zero.png
@@ -73,8 +73,10 @@ python tools/repack_limbo.py --identity-test limbo_boot.pkg <filelist_dir>
 python tools/shot_diff.py vanilla.png modded.png
 ```
 
-Copy the rebuilt `new_boot.pkg` over the installed `limbo_boot.pkg` (back it up first)
-and launch via Steam. Steam does not revert swapped pkgs.
+Copy the rebuilt `new_boot.pkg` over the installed `limbo_boot.pkg` (back it up first —
+e.g. `um backup` from universal-modder) and launch via Steam. Steam does not revert
+swapped pkgs. `repack_limbo.py` refuses to write over the input pkg or an existing
+output file unless you pass `--force`.
 
 ## Texture format (A8L8)
 
@@ -98,6 +100,22 @@ virtual W/H in the header. Atlas path→rect tables are the shipped
 
 Full write-up (formats, gotchas, verification): `universal-modder` field note
 `knowledge/games/limbo/pngatlas-a8l8-format.md`.
+
+## Safety & scope
+
+- **Only touches files you point it at.** No network access, no subprocesses, no
+  `eval`, and no file deletion anywhere in these scripts.
+- **`unpack_limbo.py` confines output to `<outdir>`;** a filelist entry that tries to
+  escape it (absolute path or `..`) is refused, and such entries are counted as
+  `skipped`.
+- **`repack_limbo.py` will not overwrite the input pkg, and will not overwrite an
+  existing output file without `--force`.** The identity rebuild proves an untouched
+  repack is byte-identical.
+- **Always back up** `limbo_boot.pkg` / `limbo_runtime.pkg` before copying a rebuilt
+  one into the game.
+- **No DRM / anti-cheat bypass.** LIMBO is a single-player game; the `.pkg` is a plain
+  data container. Use these tools on a game you own.
+- Provided **as-is, MIT, no warranty.**
 
 ## Credits & disclosure
 

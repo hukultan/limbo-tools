@@ -12,11 +12,15 @@ copy is the ORIGINAL blob slice verbatim; only explicitly replaced entries chang
    SHA comparison). Compared to zlib.compress, this means an unchanged blob can
    never make the new pkg differ from the original.
 
+The output pkg is never written over an existing file unless you pass --force
+(and never over the input pkg). Back up your game's .pkg before you copy the
+rebuilt one into the install.
+
 Usage:
-    repack_limbo.py <in.pkg> <filelist_dir> <out.pkg> [--entry name --in file] [...]
+    repack_limbo.py <in.pkg> <filelist_dir> <out.pkg> [--force] [--entry name --in file] [...]
     repack_limbo.py --identity-test <pkg> <filelist_dir>     # rebuild untouched, compare SHA
 """
-import os, sys, struct, zlib, hashlib
+import os, sys, struct, zlib, hashlib, tempfile
 
 
 def crc32(text):
@@ -59,25 +63,41 @@ def repack(entries, out_path):
         off += len(b)
     for e in entries:
         out += e["blob"]
+    parent = os.path.dirname(os.path.abspath(out_path))
+    os.makedirs(parent, exist_ok=True)
     with open(out_path, "wb") as fh:
         fh.write(bytes(out))
     return bytes(out)
 
 
 def main(argv):
-    if argv[0] == "--identity-test":
+    if argv and argv[0] == "--identity-test":
+        if len(argv) != 3:
+            print(__doc__)
+            return 2
         pkg, fdir, = argv[1], argv[2]
         names = read_filelists(fdir)
         raw, entries, base = load(pkg)
-        news = repack(list({**e, "blob": e["blob"]} for e in entries), "identity.tmp.pkg")
-        cloned = bytearray(raw)
-        ok = hashlib.sha256(cloned).digest() == hashlib.sha256(news).digest()
+        tmp = tempfile.NamedTemporaryFile(prefix="limbo_identity_", suffix=".pkg", delete=False)
+        tmp.close()
+        try:
+            news = repack(list({**e, "blob": e["blob"]} for e in entries), tmp.name)
+        finally:
+            os.remove(tmp.name)
+        ok = hashlib.sha256(raw).digest() == hashlib.sha256(news).digest()
         print("identity test:", "BYTE-IDENTICAL (" + str(len(news)) + " bytes)" if ok else "DIFFERS")
         return 0 if ok else 1
-    if len(argv) < 4 or len(argv[2].replace("--", "")) == 0:
+    if len(argv) < 3 or argv[2].startswith("--"):
         print(__doc__)
         return 2
     pkg_in, fdir, pkg_out = argv[0], argv[1], argv[2]
+    force = "--force" in argv
+    if os.path.abspath(pkg_out) == os.path.abspath(pkg_in):
+        print("refusing to overwrite the input pkg; choose a different output path", file=sys.stderr)
+        return 2
+    if os.path.exists(pkg_out) and not force:
+        print("refusing to overwrite existing %s (pass --force to allow)" % pkg_out, file=sys.stderr)
+        return 2
     replaces = {}
     i = 3
     while i < len(argv):

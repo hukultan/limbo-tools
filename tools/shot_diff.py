@@ -3,6 +3,9 @@ from PIL import Image
 import os
 
 names = sys.argv[1:]
+if not names:
+    print("usage: shot_diff.py IMAGE [IMAGE ...]   # mean abs diff between consecutive frames")
+    sys.exit(2)
 prev = None
 for n in names:
     im = np.asarray(Image.open(n).convert('L')).astype(np.int16)

@@ -10,3 +10,7 @@ __UNKNOWN/
 *.pngblur
 !docs/**
 *.tmp.pkg
+
+# python
+__pycache__/
+*.pyc
