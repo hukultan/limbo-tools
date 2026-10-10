@@ -14,7 +14,7 @@ All scripts live in [`tools/`](tools).
 |------|---------|
 | `tools/unpack_limbo.py` | Extract a `limbo_boot.pkg` / `limbo_runtime.pkg` into files. |
 | `tools/repack_limbo.py` | Rebuild a `.pkg`, replacing named entries; identity-safe. |
-| `tools/limbo_tex.py` | Inspect / decode / patch / round-trip sprite + atlas textures. |
+| `tools/limbo_tex.py` | Inspect / extract / pack / patch / round-trip sprite + atlas textures. |
 | `tools/make_titlezero.py` | Example edit: zero the luma plane of a standalone sprite. |
 | `tools/shot_diff.py` | Diff a sequence of screenshots (numpy/PIL) to confirm an edit. |
 
@@ -55,8 +55,12 @@ python tools/unpack_limbo.py  limbo_runtime.pkg  <filelist_dir>  out/runtime
 
 # textures
 python tools/limbo_tex.py inspect  out/boot/derived/pc/data/sprites/edges/metal_heavy.png
-python tools/limbo_tex.py decode   FILE --w 512 --h 16 --out metal_heavy.png
-python tools/limbo_tex.py patch    FILE --out NEW --in edited.png --w 512 --h 16
+python tools/limbo_tex.py extract  SPRITE.png --out metal_heavy.png          # dims from header
+python tools/limbo_tex.py extract  ATLAS.pngatlas --rect 804,2345,215,206 --out head.png
+python tools/limbo_tex.py pack     SPRITE.png --out NEW --in edited.png      # rebuild + mips
+python tools/limbo_tex.py patch    SPRITE.png --out NEW --in edited.png      # same, in-place
+python tools/limbo_tex.py patch    ATLAS.pngatlas --out NEW --in edited.png \
+        --rect 804,2345,215,206 --mips                                       # edit all atlas mips
 python tools/limbo_tex.py roundtrip FILE ...          # decode+re-encode pixels, check byte-identical
 
 # example edit (same byte length keeps the .d deflate valid)
@@ -93,10 +97,23 @@ pixels at path_end + 18, to EOF
 Each texel is a little-endian `u16`; low byte = luma (**L drives on-screen
 visibility**, `L=0` invisible), high byte = alpha (**effectively unused**).
 
-Standalone sprites store a full mip chain and do **not** store W/H (count it from the
-pixel size); atlases are 4096-wide sheets whose pixel data is a 6-level mip chain, with
-virtual W/H in the header. Atlas path→rect tables are the shipped
-`data/texture/atlas/*.txt` manifests.
+The 18-byte internal header stores **W/H** for both sprites and atlases (e.g. the
+menu title is `W=2048 H=1024 usedW=1280 usedH=720`), so `extract` needs no size
+guessing. The pixel region is a **full mip chain** (level 0 first, each level a
+half-size box average), so a standalone sprite's texel count is not `W*H` but
+`W*H + W/2*H/2 + …` down to the level where a side reaches 1.
+
+Mip levels are the original artist's data and, in the shipped files, are exactly
+2×2 **floor** averages of the L and A bytes taken independently (verified
+byte-exact on 140/140 standalone sprites). `pack` therefore regenerates them that
+way when you edit level 0, and the rebuild is byte-identical when you don't.
+
+Atlases are 4096-wide level-0 sheets whose pixel data is a 6-level mip chain
+(`atlas_blur` 4096×4096, `atlas_norm` 4096×1024). Atlas path→rect tables are the
+shipped `data/texture/atlas/*.txt` manifests; a rect is
+`x y w h offX offY "path"` (TAB-separated). To repaint one member, keep its rect
+and edit those texels — `patch --rect ... --mips` writes the edit into every mip
+level so a member drawn small or through the blur pass doesn't sample stale art.
 
 Full write-up (formats, gotchas, verification): `universal-modder` field note
 `knowledge/games/limbo/pngatlas-a8l8-format.md`.
